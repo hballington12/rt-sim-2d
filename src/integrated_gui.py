@@ -56,7 +56,8 @@ class IntegratedRayTracingApp:
             "position_x": 0.0,
             "position_y": 0.0,
             "rotation_deg": 30.0,
-            "refractive_index": 1.31,
+            "refractive_index_real": 1.31,
+            "refractive_index_imag": 0.0,
             "num_rays": 10,
             "plane_wave_offset": 0.0,
             "polarization": Polarization.PARALLEL,
@@ -145,18 +146,34 @@ class IntegratedRayTracingApp:
         )
         y_pos += spacing
 
-        # Refractive Index Slider
-        self.n_label = pygame_gui.elements.UILabel(
+        # Refractive Index Real Part Slider
+        self.n_real_label = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(panel_x, y_pos, label_width, height),
-            text=f"Refractive Index: {self.scene_params['refractive_index']:.2f}",
+            text=f"n (real): {self.scene_params['refractive_index_real']:.3f}",
             manager=self.ui_manager,
         )
-        self.n_slider = pygame_gui.elements.UIHorizontalSlider(
+        self.n_real_slider = pygame_gui.elements.UIHorizontalSlider(
             relative_rect=pygame.Rect(
                 panel_x + label_width, y_pos, control_width, height
             ),
-            start_value=self.scene_params["refractive_index"],
+            start_value=self.scene_params["refractive_index_real"],
             value_range=(1.0, 2.5),
+            manager=self.ui_manager,
+        )
+        y_pos += spacing
+
+        # Refractive Index Imaginary Part Slider
+        self.n_imag_label = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(panel_x, y_pos, label_width, height),
+            text=f"n (imag): {self.scene_params['refractive_index_imag']:.3f}",
+            manager=self.ui_manager,
+        )
+        self.n_imag_slider = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect(
+                panel_x + label_width, y_pos, control_width, height
+            ),
+            start_value=self.scene_params["refractive_index_imag"],
+            value_range=(0.0, 1.0),
             manager=self.ui_manager,
         )
         y_pos += spacing
@@ -262,7 +279,10 @@ class IntegratedRayTracingApp:
             center=(self.scene_params["position_x"], self.scene_params["position_y"]),
             size=1.0,
             rotation=math.radians(self.scene_params["rotation_deg"]),
-            refractive_index=complex(self.scene_params["refractive_index"], 0.0),
+            refractive_index=complex(
+                self.scene_params["refractive_index_real"],
+                self.scene_params["refractive_index_imag"],
+            ),
         )
         self.shapes.append(shape)
 
@@ -517,9 +537,13 @@ class IntegratedRayTracingApp:
                 self.scene_params["rotation_deg"] = event.value
                 self.rotation_label.set_text(f"Rotation: {event.value:.1f}°")
                 update_needed = True
-            elif event.ui_element == self.n_slider:
-                self.scene_params["refractive_index"] = event.value
-                self.n_label.set_text(f"Refractive Index: {event.value:.2f}")
+            elif event.ui_element == self.n_real_slider:
+                self.scene_params["refractive_index_real"] = event.value
+                self.n_real_label.set_text(f"n (real): {event.value:.3f}")
+                update_needed = True
+            elif event.ui_element == self.n_imag_slider:
+                self.scene_params["refractive_index_imag"] = event.value
+                self.n_imag_label.set_text(f"n (imag): {event.value:.3f}")
                 update_needed = True
             elif event.ui_element == self.rays_slider:
                 self.scene_params["num_rays"] = int(event.value)

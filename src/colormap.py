@@ -1,23 +1,38 @@
 import numpy as np
 from typing import Tuple
+import math
 
 
 def intensity_to_heat_color(
-    intensity: float, max_intensity: float = 1.0
+    intensity: float, max_intensity: float = 1.0, log_scale: bool = True
 ) -> Tuple[int, int, int]:
     """
-    Convert intensity value to heat-like color.
+    Convert intensity value to heat-like color with logarithmic scaling.
     Colormap: Black → Red → Orange → Yellow → White
 
     Args:
         intensity: Electric field intensity (E²/2)
         max_intensity: Maximum expected intensity for normalization
+        log_scale: Use logarithmic scaling spanning 4 orders of magnitude
 
     Returns:
         RGB color tuple (0-255 for each channel)
     """
-    # Normalize intensity to [0, 1]
-    normalized = min(1.0, max(0.0, intensity / max_intensity))
+    if log_scale:
+        # Logarithmic scaling: map intensities from max/10000 to max
+        # This spans 4 orders of magnitude
+        min_log_intensity = max_intensity / 10000.0  # 4 orders of magnitude down
+
+        if intensity <= min_log_intensity:
+            normalized = 0.0
+        else:
+            # Logarithmic normalization
+            log_intensity = math.log10(intensity / min_log_intensity)
+            log_max = 4.0  # log10(10000) = 4.0
+            normalized = min(1.0, max(0.0, log_intensity / log_max))
+    else:
+        # Linear normalization (original)
+        normalized = min(1.0, max(0.0, intensity / max_intensity))
 
     # Define color stops for heat map
     # Each stop is (position, R, G, B) where RGB are in [0, 1]
@@ -67,10 +82,17 @@ def calculate_intensity(electric_field: float) -> float:
 
 
 def draw_colorscale(
-    screen, font, x: int, y: int, width: int, height: int, max_intensity: float = 0.5
+    screen,
+    font,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    max_intensity: float = 0.5,
+    log_scale: bool = True,
 ):
     """
-    Draw a colorscale legend on the screen.
+    Draw a colorscale legend on the screen with logarithmic scale.
 
     Args:
         screen: Pygame screen surface
@@ -78,15 +100,34 @@ def draw_colorscale(
         x, y: Top-left position
         width, height: Size of the colorscale bar
         max_intensity: Maximum intensity value for the scale
+        log_scale: Use logarithmic scale spanning 4 orders of magnitude
     """
     import pygame
 
-    # Draw the gradient bar
-    for i in range(height):
-        # Calculate intensity for this position
-        intensity = max_intensity * (1.0 - i / height)
-        color = intensity_to_heat_color(intensity, max_intensity)
-        pygame.draw.line(screen, color, (x, y + i), (x + width, y + i))
+    if log_scale:
+        # For logarithmic scale
+        min_intensity = max_intensity / 10000.0  # 4 orders of magnitude
+
+        # Draw the gradient bar
+        for i in range(height):
+            # Map position to logarithmic intensity
+            t = 1.0 - i / height  # 0 to 1 from bottom to top
+            if t <= 0:
+                intensity = min_intensity
+            else:
+                # Logarithmic mapping
+                log_range = 4.0  # 4 orders of magnitude
+                log_val = t * log_range  # 0 to 4
+                intensity = min_intensity * (10**log_val)
+
+            color = intensity_to_heat_color(intensity, max_intensity, log_scale=True)
+            pygame.draw.line(screen, color, (x, y + i), (x + width, y + i))
+    else:
+        # Linear scale (original)
+        for i in range(height):
+            intensity = max_intensity * (1.0 - i / height)
+            color = intensity_to_heat_color(intensity, max_intensity, log_scale=False)
+            pygame.draw.line(screen, color, (x, y + i), (x + width, y + i))
 
     # Draw border
     pygame.draw.rect(screen, (200, 200, 200), (x, y, width, height), 2)
@@ -95,17 +136,32 @@ def draw_colorscale(
     label_color = (200, 200, 200)
 
     # Title
-    title = font.render("Intensity", True, label_color)
+    title_text = "Log(I)" if log_scale else "Intensity"
+    title = font.render(title_text, True, label_color)
     screen.blit(title, (x, y - 20))
 
-    # Max value label
-    max_label = font.render(f"{max_intensity:.2f}", True, label_color)
-    screen.blit(max_label, (x + width + 5, y - 5))
+    if log_scale:
+        # Logarithmic labels
+        # Max value label (10^0 relative to max)
+        max_label = font.render(f"{max_intensity:.2e}", True, label_color)
+        screen.blit(max_label, (x + width + 5, y - 5))
 
-    # Mid value label
-    mid_label = font.render(f"{max_intensity / 2:.2f}", True, label_color)
-    screen.blit(mid_label, (x + width + 5, y + height // 2 - 5))
+        # 10^-2 label
+        mid_intensity = max_intensity / 100
+        mid_label = font.render(f"{mid_intensity:.2e}", True, label_color)
+        screen.blit(mid_label, (x + width + 5, y + height // 2 - 5))
 
-    # Min value label
-    min_label = font.render("0.00", True, label_color)
-    screen.blit(min_label, (x + width + 5, y + height - 5))
+        # Min value label (10^-4 relative to max)
+        min_intensity = max_intensity / 10000
+        min_label = font.render(f"{min_intensity:.2e}", True, label_color)
+        screen.blit(min_label, (x + width + 5, y + height - 5))
+    else:
+        # Linear labels (original)
+        max_label = font.render(f"{max_intensity:.2f}", True, label_color)
+        screen.blit(max_label, (x + width + 5, y - 5))
+
+        mid_label = font.render(f"{max_intensity / 2:.2f}", True, label_color)
+        screen.blit(mid_label, (x + width + 5, y + height // 2 - 5))
+
+        min_label = font.render("0.00", True, label_color)
+        screen.blit(min_label, (x + width + 5, y + height - 5))
