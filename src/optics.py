@@ -157,16 +157,16 @@ def fresnel_reflection_coefficient(
 
     if polarization == Polarization.PERPENDICULAR:
         # Perpendicular polarization (s-polarized, E field out of plane)
-        # Corresponds to f11 in the Rust code
-        r_perp = (n2 * cos_theta_i - n1 * cos_theta_t) / (
-            n1 * cos_theta_t + n2 * cos_theta_i
+        # r_s = (n1*cos(θi) - n2*cos(θt)) / (n1*cos(θi) + n2*cos(θt))
+        r_perp = (n1 * cos_theta_i - n2 * cos_theta_t) / (
+            n1 * cos_theta_i + n2 * cos_theta_t
         )
         return r_perp
     else:
         # Parallel polarization (p-polarized, E field in plane)
-        # Corresponds to f22 in the Rust code
-        r_para = (n1 * cos_theta_i - n2 * cos_theta_t) / (
-            n1 * cos_theta_i + n2 * cos_theta_t
+        # r_p = (n2*cos(θi) - n1*cos(θt)) / (n2*cos(θi) + n1*cos(θt))
+        r_para = (n2 * cos_theta_i - n1 * cos_theta_t) / (
+            n2 * cos_theta_i + n1 * cos_theta_t
         )
         return r_para
 
@@ -192,13 +192,13 @@ def fresnel_transmission_coefficient(
 
     if polarization == Polarization.PERPENDICULAR:
         # Perpendicular polarization (s-polarized)
-        # Corresponds to f11 in the Rust code
-        t_perp = (2.0 * n1 * cos_theta_i) / (n1 * cos_theta_t + n2 * cos_theta_i)
+        # t_s = (2*n1*cos(θi)) / (n1*cos(θi) + n2*cos(θt))
+        t_perp = (2.0 * n1 * cos_theta_i) / (n1 * cos_theta_i + n2 * cos_theta_t)
         return t_perp
     else:
         # Parallel polarization (p-polarized)
-        # Corresponds to f22 in the Rust code
-        t_para = (2.0 * n1 * cos_theta_i) / (n1 * cos_theta_i + n2 * cos_theta_t)
+        # t_p = (2*n1*cos(θi)) / (n2*cos(θi) + n1*cos(θt))
+        t_para = (2.0 * n1 * cos_theta_i) / (n2 * cos_theta_i + n1 * cos_theta_t)
         return t_para
 
 
