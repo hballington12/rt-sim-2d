@@ -75,6 +75,13 @@ class IntegratedRayTracingApp:
         self.bound_size = 10.0
         self.max_intensity = 0.5
 
+        # Scattering analysis data
+        self.scattering_angles = np.linspace(
+            0, 180, 181
+        )  # 0 to 180 degrees in 1° steps
+        self.scattering_intensity = np.zeros(181)  # Intensity at each angle bin
+        self.initial_direction = np.array([1.0, 0.0])  # Initial ray direction (+x)
+
         # Create GUI controls
         self._create_gui_controls()
 
@@ -87,11 +94,11 @@ class IntegratedRayTracingApp:
     def _create_gui_controls(self):
         """Create all GUI control elements using pygame-gui"""
         panel_x = self.render_width + 20
-        y_pos = 20
+        y_pos = 10
         label_width = 150
         control_width = 200
         height = 30
-        spacing = 40
+        spacing = 30  # Reduced from 40 to fit more controls
 
         # Title
         title = pygame_gui.elements.UILabel(
@@ -99,7 +106,7 @@ class IntegratedRayTracingApp:
             text="Scene Controls",
             manager=self.ui_manager,
         )
-        y_pos += 50
+        y_pos += 35  # Reduced from 50
 
         # Position X Slider
         self.pos_x_label = pygame_gui.elements.UILabel(
@@ -192,7 +199,7 @@ class IntegratedRayTracingApp:
                 panel_x + label_width, y_pos, control_width, height
             ),
             start_value=self.scene_params["refractive_index_imag"],
-            value_range=(0.0, 1.0),
+            value_range=(0.0, 0.1),
             manager=self.ui_manager,
         )
         y_pos += spacing
@@ -259,7 +266,7 @@ class IntegratedRayTracingApp:
             value_range=(0.0, 10.0),
             manager=self.ui_manager,
         )
-        y_pos += spacing + 20
+        y_pos += spacing + 10  # Reduced extra spacing
 
         # Shape Dropdown
         shape_label = pygame_gui.elements.UILabel(
@@ -275,7 +282,7 @@ class IntegratedRayTracingApp:
             ),
             manager=self.ui_manager,
         )
-        y_pos += spacing + 20
+        y_pos += spacing + 10  # Reduced extra spacing
 
         # Polarization Selection
         pol_label = pygame_gui.elements.UILabel(
@@ -283,7 +290,7 @@ class IntegratedRayTracingApp:
             text="Polarization:",
             manager=self.ui_manager,
         )
-        y_pos += 35
+        y_pos += 30  # Reduced from 35
 
         self.pol_parallel_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(panel_x, y_pos, 170, height),
@@ -302,6 +309,22 @@ class IntegratedRayTracingApp:
             self.pol_parallel_button.disable()
         else:
             self.pol_perp_button.disable()
+
+        # Scattering plot area (below controls, 33% of panel height)
+        y_pos += spacing + 10  # Reduced extra spacing
+        plot_y_start = y_pos
+        plot_height = int(self.height * 0.30)  # Reduced from 0.33 to fit better
+        plot_width = 360
+
+        # Store plot dimensions for rendering
+        self.plot_rect = pygame.Rect(panel_x, plot_y_start, plot_width, plot_height)
+
+        # Add title for plot
+        plot_title = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(panel_x, plot_y_start, plot_width, 30),
+            text="Normalised Scattering Intensity",
+            manager=self.ui_manager,
+        )
 
     def _update_scene(self):
         """Update scene based on current parameters"""
@@ -363,6 +386,80 @@ class IntegratedRayTracingApp:
             ray_path = RayPath(ray)
             self._trace_ray(ray, ray_path)
             self.ray_paths.append(ray_path)
+
+        # Calculate scattering distribution after all rays are traced
+        self._calculate_scattering_distribution()
+
+    def _calculate_scattering_distribution(self):
+        """Calculate angular scattering distribution from scattered rays"""
+        # Reset scattering intensity array
+        self.scattering_intensity = np.zeros(181)
+
+        # Collect scattered rays that hit the boundary
+        for ray_path in self.ray_paths:
+            for ray in ray_path.segments:
+                # Only count rays with recursion > 0 that hit the boundary
+                if ray.recursion_level > 0 and ray.hit_boundary:
+                    # Calculate scattering angle from initial direction
+                    # angle = arccos(ray.direction · initial_direction)
+                    cos_angle = np.dot(ray.direction, self.initial_direction)
+                    # Clamp to [-1, 1] to handle numerical errors
+                    cos_angle = np.clip(cos_angle, -1.0, 1.0)
+                    angle_rad = np.arccos(cos_angle)
+                    angle_deg = np.degrees(angle_rad)
+
+                    # Clamp angles away from singularities at 0° and 180°
+                    # where sin(theta) = 0 causes division by zero issues
+                    if angle_deg < 0.5:
+                        angle_deg = 0.5
+                    elif angle_deg > 179.5:
+                        angle_deg = 179.5
+
+                    # Find the bin index (0-180 degrees)
+                    bin_index = int(np.round(angle_deg))
+                    bin_index = np.clip(bin_index, 0, 180)
+
+                    # Calculate intensity: I = E^2 / 2
+                    intensity = (ray.electric_field**2) / 2.0
+
+                    # Add intensity to bin (we'll divide by sin(theta) after accumulation)
+                    self.scattering_intensity[bin_index] += intensity
+
+        # Calculate differential scattering cross-section for each bin
+        # by dividing by the solid angle width (proportional to sin(theta))
+        differential_cross_section = np.zeros(181)
+        for i in range(181):
+            angle_deg = float(i)
+            # Clamp away from singularities
+            if angle_deg < 0.5:
+                angle_deg = 0.1
+            elif angle_deg > 179.5:
+                angle_deg = 179.9
+
+            angle_rad = np.radians(angle_deg)
+            sin_theta = np.sin(angle_rad)
+
+            if sin_theta > 0:
+                differential_cross_section[i] = self.scattering_intensity[i] / sin_theta
+
+        # Normalize: multiply back by sin(theta) before summing
+        # This way normalization is by total intensity (sin factors cancel)
+        total_intensity = 0.0
+        for i in range(181):
+            angle_deg = float(i)
+            if angle_deg < 0.5:
+                angle_deg = 0.1
+            elif angle_deg > 179.5:
+                angle_deg = 179.9
+            angle_rad = np.radians(angle_deg)
+            sin_theta = np.sin(angle_rad)
+            total_intensity += differential_cross_section[i] * sin_theta
+
+        if total_intensity > 0:
+            differential_cross_section /= total_intensity
+
+        # Store the differential cross-section (this is what we plot)
+        self.scattering_intensity = differential_cross_section
 
     def _trace_ray(self, ray, ray_path):
         """Trace a ray through the scene"""
@@ -542,6 +639,89 @@ class IntegratedRayTracingApp:
                 self.world_to_screen(seg_end),
                 thickness,
             )
+
+    def _draw_scattering_plot(self):
+        """Draw the angular scattering distribution plot"""
+        # Define plot area (with margins)
+        margin = 10
+        plot_x = self.plot_rect.x + margin
+        plot_y = self.plot_rect.y + 40  # Below title
+        plot_w = self.plot_rect.width - 2 * margin
+        plot_h = self.plot_rect.height - 50  # Account for title and bottom margin
+
+        # Draw plot background
+        pygame.draw.rect(self.screen, (40, 40, 40), (plot_x, plot_y, plot_w, plot_h))
+
+        # Draw plot border
+        pygame.draw.rect(
+            self.screen, (100, 100, 100), (plot_x, plot_y, plot_w, plot_h), 1
+        )
+
+        # Find max intensity for scaling
+        max_intensity = np.max(self.scattering_intensity)
+        if max_intensity <= 0:
+            # No scattering data yet, just show empty plot
+            return
+
+        # Draw grid lines
+        grid_color = (60, 60, 60)
+        # Horizontal grid lines
+        for i in range(5):
+            y = plot_y + int(i * plot_h / 4)
+            pygame.draw.line(
+                self.screen, grid_color, (plot_x, y), (plot_x + plot_w, y), 1
+            )
+
+        # Vertical grid lines (every 30 degrees)
+        for angle in [0, 30, 60, 90, 120, 150, 180]:
+            x = plot_x + int((angle / 180.0) * plot_w)
+            pygame.draw.line(
+                self.screen, grid_color, (x, plot_y), (x, plot_y + plot_h), 1
+            )
+
+        # Draw the scattering data with logarithmic y-axis
+        points = []
+        min_intensity_log = max_intensity / 1000.0  # 3 orders of magnitude
+
+        for i, intensity in enumerate(self.scattering_intensity):
+            angle_deg = i  # Angle in degrees (0-180)
+            x = plot_x + int((angle_deg / 180.0) * plot_w)
+
+            # Use minimum log value for zero or very small intensities
+            plot_intensity = max(intensity, min_intensity_log)
+
+            # Logarithmic scaling for y-axis
+            log_intensity = np.log10(plot_intensity)
+            log_max = np.log10(max_intensity)
+            log_min = np.log10(min_intensity_log)
+
+            # Normalize to [0, 1] range
+            normalized = (log_intensity - log_min) / (log_max - log_min)
+            normalized = np.clip(normalized, 0.0, 1.0)
+
+            # Invert y-axis so high values are at top
+            y = plot_y + plot_h - int(normalized * plot_h)
+            points.append((x, y))
+
+        # Draw line connecting points
+        if len(points) > 1:
+            pygame.draw.lines(self.screen, (0, 255, 100), False, points, 2)
+
+        # Draw axis labels
+        label_color = (200, 200, 200)
+
+        # X-axis labels (angles)
+        for angle in [0, 30, 60, 90, 120, 150, 180]:
+            x = plot_x + int((angle / 180.0) * plot_w)
+            label = self.font.render(f"{angle}°", True, label_color)
+            self.screen.blit(label, (x - 10, plot_y + plot_h + 5))
+
+        # Y-axis labels (log scale - show max and min)
+        y_label_max = self.font.render(f"{max_intensity:.2e}", True, label_color)
+        self.screen.blit(y_label_max, (plot_x - 5, plot_y - 15))
+
+        y_label_min = self.font.render(f"{min_intensity_log:.2e}", True, label_color)
+        self.screen.blit(y_label_min, (plot_x - 5, plot_y + plot_h - 10))
 
     def render_scene(self):
         """Render the ray tracing scene to the render surface"""
@@ -751,6 +931,9 @@ class IntegratedRayTracingApp:
 
             # Draw GUI
             self.ui_manager.draw_ui(self.screen)
+
+            # Draw scattering plot (after GUI so it appears on top)
+            self._draw_scattering_plot()
 
             pygame.display.flip()
 
