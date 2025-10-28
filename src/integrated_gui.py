@@ -17,6 +17,7 @@ from optics import (
     calculate_angle_of_incidence,
     fresnel_reflection_coefficient,
     fresnel_transmission_coefficient,
+    calculate_absorption_factor,
 )
 from colormap import (
     intensity_to_heat_color,
@@ -58,6 +59,7 @@ class IntegratedRayTracingApp:
             "rotation_deg": 30.0,
             "refractive_index_real": 1.31,
             "refractive_index_imag": 0.0,
+            "wavelength_nm": 530.0,  # Wavelength in nanometers
             "num_rays": 10,
             "plane_wave_offset": 0.0,
             "polarization": Polarization.PARALLEL,
@@ -174,6 +176,22 @@ class IntegratedRayTracingApp:
             ),
             start_value=self.scene_params["refractive_index_imag"],
             value_range=(0.0, 1.0),
+            manager=self.ui_manager,
+        )
+        y_pos += spacing
+
+        # Wavelength Slider
+        self.wavelength_label = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(panel_x, y_pos, label_width, height),
+            text=f"Wavelength: {self.scene_params['wavelength_nm']:.0f} nm",
+            manager=self.ui_manager,
+        )
+        self.wavelength_slider = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect(
+                panel_x + label_width, y_pos, control_width, height
+            ),
+            start_value=self.scene_params["wavelength_nm"],
+            value_range=(380.0, 780.0),  # Visible light range
             manager=self.ui_manager,
         )
         y_pos += spacing
@@ -373,7 +391,7 @@ class IntegratedRayTracingApp:
                 )
 
     def _handle_intersection(self, ray, ray_path, shape, normal, intersection_point):
-        """Handle ray-shape intersection with Fresnel equations"""
+        """Handle ray-shape intersection with Fresnel equations and absorption"""
         is_entering = ray.refractive_index == VACUUM_REFRACTIVE_INDEX
 
         if is_entering:
@@ -383,6 +401,15 @@ class IntegratedRayTracingApp:
             n1 = shape.refractive_index
             n2 = VACUUM_REFRACTIVE_INDEX
 
+        # Calculate absorption if ray traveled through absorbing medium
+        absorption_factor = 1.0
+        if ray.refractive_index.imag > 0 and ray.end is not None:
+            # Ray traveled through absorbing medium
+            distance = np.linalg.norm(ray.end - ray.start)
+            absorption_factor = calculate_absorption_factor(
+                distance, ray.refractive_index.imag, self.scene_params["wavelength_nm"]
+            )
+
         theta_i = calculate_angle_of_incidence(ray.direction, normal)
         theta_t = snells_law_refraction_angle(theta_i, n1, n2)
 
@@ -390,12 +417,12 @@ class IntegratedRayTracingApp:
             n1, n2, theta_i, theta_t, ray.polarization
         )
 
-        # Reflected ray
+        # Reflected ray (with absorption applied if it was inside absorbing medium)
         reflected_dir = get_reflection_vector(ray.direction, normal)
         reflected_ray = Ray(
             start=intersection_point,
             direction=reflected_dir,
-            electric_field=ray.electric_field * abs(r_coeff),
+            electric_field=ray.electric_field * abs(r_coeff) * absorption_factor,
             polarization=ray.polarization,
             refractive_index=n1,
             recursion_level=ray.recursion_level + 1,
@@ -403,7 +430,7 @@ class IntegratedRayTracingApp:
         self._trace_ray(reflected_ray, ray_path)
         ray_path.add_segment(reflected_ray)
 
-        # Refracted ray
+        # Refracted ray (with absorption applied)
         if theta_t is not None:
             t_coeff = fresnel_transmission_coefficient(
                 n1, n2, theta_i, theta_t, ray.polarization
@@ -414,7 +441,7 @@ class IntegratedRayTracingApp:
             refracted_ray = Ray(
                 start=intersection_point,
                 direction=refracted_dir,
-                electric_field=ray.electric_field * abs(t_coeff),
+                electric_field=ray.electric_field * abs(t_coeff) * absorption_factor,
                 polarization=ray.polarization,
                 refractive_index=n2,
                 recursion_level=ray.recursion_level + 1,
@@ -440,6 +467,54 @@ class IntegratedRayTracingApp:
         """Convert world to screen coordinates"""
         screen_point = point * np.array([1, -1]) * self.scale + self.offset
         return tuple(screen_point.astype(int))
+
+    def _draw_absorbing_ray(self, ray):
+        """Draw a ray with gradient to show absorption"""
+        # Number of segments to draw gradient
+        num_segments = 20
+
+        start_pos = ray.start
+        end_pos = ray.end
+        total_distance = np.linalg.norm(end_pos - start_pos)
+
+        if total_distance <= 0:
+            return
+
+        # Get starting field amplitude
+        initial_field = ray.electric_field
+
+        # Draw ray as multiple segments with decreasing intensity
+        for i in range(num_segments):
+            # Calculate segment positions
+            t1 = i / num_segments
+            t2 = (i + 1) / num_segments
+            seg_start = start_pos + t1 * (end_pos - start_pos)
+            seg_end = start_pos + t2 * (end_pos - start_pos)
+
+            # Calculate absorption at midpoint of segment
+            mid_distance = (t1 + t2) / 2 * total_distance
+            absorption = calculate_absorption_factor(
+                mid_distance,
+                ray.refractive_index.imag,
+                self.scene_params["wavelength_nm"],
+            )
+
+            # Apply absorption to get field at this segment
+            seg_field = initial_field * absorption
+            intensity = calculate_intensity(seg_field)
+
+            # Get color and thickness
+            color = intensity_to_heat_color(intensity, self.max_intensity)
+            thickness = max(1, min(3, int(1 + 2 * intensity / self.max_intensity)))
+
+            # Draw segment
+            pygame.draw.line(
+                self.render_surface,
+                color,
+                self.world_to_screen(seg_start),
+                self.world_to_screen(seg_end),
+                thickness,
+            )
 
     def render_scene(self):
         """Render the ray tracing scene to the render surface"""
@@ -497,22 +572,28 @@ class IntegratedRayTracingApp:
             center_screen = self.world_to_screen(shape.center)
             pygame.draw.circle(self.render_surface, (255, 100, 100), center_screen, 3)
 
-        # Draw rays
+        # Draw rays with gradient for absorption
         for ray_path in self.ray_paths:
             for ray in ray_path.segments:
                 if ray.end is not None:
-                    intensity = calculate_intensity(ray.electric_field)
-                    color = intensity_to_heat_color(intensity, self.max_intensity)
-                    thickness = max(
-                        1, min(3, int(1 + 2 * intensity / self.max_intensity))
-                    )
-                    pygame.draw.line(
-                        self.render_surface,
-                        color,
-                        self.world_to_screen(ray.start),
-                        self.world_to_screen(ray.end),
-                        thickness,
-                    )
+                    # Check if ray is in absorbing medium
+                    if ray.refractive_index.imag > 0:
+                        # Draw ray with gradient showing absorption
+                        self._draw_absorbing_ray(ray)
+                    else:
+                        # Draw normal ray
+                        intensity = calculate_intensity(ray.electric_field)
+                        color = intensity_to_heat_color(intensity, self.max_intensity)
+                        thickness = max(
+                            1, min(3, int(1 + 2 * intensity / self.max_intensity))
+                        )
+                        pygame.draw.line(
+                            self.render_surface,
+                            color,
+                            self.world_to_screen(ray.start),
+                            self.world_to_screen(ray.end),
+                            thickness,
+                        )
 
         # Draw colorscale
         draw_colorscale(
@@ -544,6 +625,10 @@ class IntegratedRayTracingApp:
             elif event.ui_element == self.n_imag_slider:
                 self.scene_params["refractive_index_imag"] = event.value
                 self.n_imag_label.set_text(f"n (imag): {event.value:.3f}")
+                update_needed = True
+            elif event.ui_element == self.wavelength_slider:
+                self.scene_params["wavelength_nm"] = event.value
+                self.wavelength_label.set_text(f"Wavelength: {event.value:.0f} nm")
                 update_needed = True
             elif event.ui_element == self.rays_slider:
                 self.scene_params["num_rays"] = int(event.value)

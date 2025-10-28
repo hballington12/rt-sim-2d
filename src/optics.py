@@ -200,3 +200,36 @@ def fresnel_transmission_coefficient(
         # Corresponds to f22 in the Rust code
         t_para = (2.0 * n1 * cos_theta_i) / (n1 * cos_theta_i + n2 * cos_theta_t)
         return t_para
+
+
+def calculate_absorption_factor(
+    distance: float, n_imag: float, wavelength_nm: float
+) -> float:
+    """
+    Calculate absorption factor for field amplitude.
+
+    The absorption factor is: exp(-2.0 * distance * n_imag * 2*pi/wavelength)
+    This is the Beer-Lambert law for electromagnetic wave amplitude.
+
+    Args:
+        distance: Path length through absorbing medium (in same units as wavelength)
+        n_imag: Imaginary part of refractive index
+        wavelength_nm: Wavelength in nanometers
+
+    Returns:
+        Absorption factor to multiply with electric field amplitude (0 to 1)
+    """
+    if n_imag <= 0 or distance <= 0:
+        return 1.0  # No absorption
+
+    # Convert wavelength to same units as scene (assuming scene units are ~1)
+    # We'll use micrometers as intermediate: 1 scene unit = 1 micrometer
+    wavelength_um = wavelength_nm / 1000.0  # nm to micrometers
+
+    # Absorption coefficient: 2 * k * (2π/λ) where k is imaginary part of n
+    absorption_coeff = 2.0 * n_imag * (2.0 * math.pi / wavelength_um)
+
+    # Beer-Lambert law for amplitude (not intensity)
+    absorption_factor = math.exp(-absorption_coeff * distance)
+
+    return absorption_factor
