@@ -11,6 +11,10 @@ class Polarization(Enum):
 
 class ShapeType(Enum):
     SQUARE = "square"
+    TRIANGLE = "triangle"  # Equilateral triangle
+    HEXAGON = "hexagon"
+    OCTAGON = "octagon"
+    CIRCLE = "circle"  # 30-sided polygon approximation
 
 
 @dataclass

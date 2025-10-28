@@ -8,7 +8,7 @@ import numpy as np
 import math
 from typing import Dict, Any
 from config import ShapeType, Polarization, VACUUM_REFRACTIVE_INDEX
-from scene import Square
+from scene import Square, Triangle, Hexagon, Octagon, Circle
 from ray import Ray, RayPath
 from optics import (
     snells_law_refraction_angle,
@@ -57,6 +57,7 @@ class IntegratedRayTracingApp:
             "position_x": 0.0,
             "position_y": 0.0,
             "rotation_deg": 30.0,
+            "scale": 1.0,
             "refractive_index_real": 1.31,
             "refractive_index_imag": 0.0,
             "wavelength_nm": 530.0,  # Wavelength in nanometers
@@ -144,6 +145,22 @@ class IntegratedRayTracingApp:
             ),
             start_value=self.scene_params["rotation_deg"],
             value_range=(0.0, 360.0),
+            manager=self.ui_manager,
+        )
+        y_pos += spacing
+
+        # Scale Slider
+        self.scale_label = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(panel_x, y_pos, label_width, height),
+            text=f"Scale: {self.scene_params['scale']:.2f}",
+            manager=self.ui_manager,
+        )
+        self.scale_slider = pygame_gui.elements.UIHorizontalSlider(
+            relative_rect=pygame.Rect(
+                panel_x + label_width, y_pos, control_width, height
+            ),
+            start_value=self.scene_params["scale"],
+            value_range=(0.1, 5.0),
             manager=self.ui_manager,
         )
         y_pos += spacing
@@ -251,7 +268,7 @@ class IntegratedRayTracingApp:
             manager=self.ui_manager,
         )
         self.shape_dropdown = pygame_gui.elements.UIDropDownMenu(
-            options_list=["Square"],
+            options_list=["Square", "Triangle", "Hexagon", "Octagon", "Circle"],
             starting_option="Square",
             relative_rect=pygame.Rect(
                 panel_x + label_width, y_pos, control_width, height
@@ -292,10 +309,19 @@ class IntegratedRayTracingApp:
         self.shapes = []
         self.ray_paths = []
 
-        # Create shape
-        shape = Square(
+        # Create shape based on selected type
+        shape_class_map = {
+            ShapeType.SQUARE: Square,
+            ShapeType.TRIANGLE: Triangle,
+            ShapeType.HEXAGON: Hexagon,
+            ShapeType.OCTAGON: Octagon,
+            ShapeType.CIRCLE: Circle,
+        }
+
+        shape_class = shape_class_map.get(self.scene_params["shape_type"], Square)
+        shape = shape_class(
             center=(self.scene_params["position_x"], self.scene_params["position_y"]),
-            size=1.0,
+            size=self.scene_params["scale"],
             rotation=math.radians(self.scene_params["rotation_deg"]),
             refractive_index=complex(
                 self.scene_params["refractive_index_real"],
@@ -376,6 +402,7 @@ class IntegratedRayTracingApp:
 
         if min_intersection is not None:
             ray.end = min_intersection
+            ray.hit_boundary = is_boundary
 
             if (
                 not is_boundary
@@ -576,6 +603,10 @@ class IntegratedRayTracingApp:
         for ray_path in self.ray_paths:
             for ray in ray_path.segments:
                 if ray.end is not None:
+                    # Skip rays that didn't hit any particle (recursion level 0 and hit boundary)
+                    if ray.recursion_level == 0 and ray.hit_boundary:
+                        continue
+
                     # Check if ray is in absorbing medium
                     if ray.refractive_index.imag > 0:
                         # Draw ray with gradient showing absorption
@@ -617,6 +648,10 @@ class IntegratedRayTracingApp:
             elif event.ui_element == self.rotation_slider:
                 self.scene_params["rotation_deg"] = event.value
                 self.rotation_label.set_text(f"Rotation: {event.value:.1f}°")
+                update_needed = True
+            elif event.ui_element == self.scale_slider:
+                self.scene_params["scale"] = event.value
+                self.scale_label.set_text(f"Scale: {event.value:.2f}")
                 update_needed = True
             elif event.ui_element == self.n_real_slider:
                 self.scene_params["refractive_index_real"] = event.value
@@ -660,7 +695,13 @@ class IntegratedRayTracingApp:
         elif event.type == pygame_gui.UI_DROP_DOWN_MENU_CHANGED:
             if event.ui_element == self.shape_dropdown:
                 # Map dropdown text to shape type
-                shape_map = {"Square": ShapeType.SQUARE}
+                shape_map = {
+                    "Square": ShapeType.SQUARE,
+                    "Triangle": ShapeType.TRIANGLE,
+                    "Hexagon": ShapeType.HEXAGON,
+                    "Octagon": ShapeType.OCTAGON,
+                    "Circle": ShapeType.CIRCLE,
+                }
                 self.scene_params["shape_type"] = shape_map.get(
                     event.text, ShapeType.SQUARE
                 )

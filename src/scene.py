@@ -108,6 +108,65 @@ class Square(Shape):
         return np.array([[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]])
 
 
+class Triangle(Shape):
+    """Equilateral triangle shape with unit size before scaling"""
+
+    def _get_base_vertices(self) -> np.ndarray:
+        """Unit equilateral triangle centered at origin"""
+        # Height of equilateral triangle with side length 1
+        height = np.sqrt(3) / 2
+        # Center the triangle at origin
+        return np.array(
+            [
+                [-0.5, -height / 3],  # Bottom left
+                [0.5, -height / 3],  # Bottom right
+                [0.0, 2 * height / 3],  # Top
+            ]
+        )
+
+
+class Hexagon(Shape):
+    """Regular hexagon shape with unit size before scaling"""
+
+    def _get_base_vertices(self) -> np.ndarray:
+        """Unit hexagon centered at origin"""
+        vertices = []
+        for i in range(6):
+            angle = i * 2 * np.pi / 6
+            x = 0.5 * np.cos(angle)
+            y = 0.5 * np.sin(angle)
+            vertices.append([x, y])
+        return np.array(vertices)
+
+
+class Octagon(Shape):
+    """Regular octagon shape with unit size before scaling"""
+
+    def _get_base_vertices(self) -> np.ndarray:
+        """Unit octagon centered at origin"""
+        vertices = []
+        for i in range(8):
+            angle = i * 2 * np.pi / 8
+            x = 0.5 * np.cos(angle)
+            y = 0.5 * np.sin(angle)
+            vertices.append([x, y])
+        return np.array(vertices)
+
+
+class Circle(Shape):
+    """Circle approximated as a 30-sided regular polygon"""
+
+    def _get_base_vertices(self) -> np.ndarray:
+        """Unit circle (30-gon) centered at origin"""
+        vertices = []
+        for i in range(30):
+            angle = i * 2 * np.pi / 30
+            x = 0.5 * np.cos(angle)
+            y = 0.5 * np.sin(angle)
+            vertices.append([x, y])
+        return np.array(vertices)
+
+
 class Scene:
     """Main scene containing shapes and handling ray tracing"""
 
@@ -147,8 +206,17 @@ class Scene:
     def _setup_shapes(self):
         """Create shape instances from config"""
         for shape_config in SHAPES:
-            if shape_config.shape_type == ShapeType.SQUARE:
-                shape = Square(
+            shape_class_map = {
+                ShapeType.SQUARE: Square,
+                ShapeType.TRIANGLE: Triangle,
+                ShapeType.HEXAGON: Hexagon,
+                ShapeType.OCTAGON: Octagon,
+                ShapeType.CIRCLE: Circle,
+            }
+
+            shape_class = shape_class_map.get(shape_config.shape_type)
+            if shape_class:
+                shape = shape_class(
                     center=shape_config.center,
                     size=shape_config.size,
                     rotation=shape_config.rotation,

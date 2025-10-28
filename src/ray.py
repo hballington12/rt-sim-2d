@@ -15,6 +15,7 @@ class Ray:
     refractive_index: complex  # Refractive index of the medium the ray is in
     recursion_level: int = 0  # Recursion depth for this ray
     end: Optional[np.ndarray] = None  # End point after intersection
+    hit_boundary: bool = False  # True if ray hit scene boundary rather than a shape
 
     def __post_init__(self):
         # Ensure direction is normalized
