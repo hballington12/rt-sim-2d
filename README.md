@@ -14,7 +14,7 @@
 
 # Basic Controls
 
-![Diagram](diagram.png)
+![Diagram](images/diagram.png)
 
 # Exercies
 
@@ -31,7 +31,7 @@ Initially, the app is set up to simulate a single ray through a symmetric hexago
 
 The optical properties of real particles in nature are wavelength-dependent. In other words, the refractive index is a function of the wavelength of light. For example, the figure below shows the refractive index of ice from 0.5 to 5 microns:
 
-![Refractive index of ice](refr-index.png)
+![Refractive index of ice](images/refr-index.png)
 
 Investigate how the following parameters affect the scattering of the single ray:
   - Refractive index real component
@@ -41,7 +41,7 @@ Investigate how the following parameters affect the scattering of the single ray
 
 Absorption in a homogeneous (uniform) medium is described by Beer's law, which predicts an exponential decay of intensity with distance:
 
-![Beer's law](beer-law.png)
+![Beer's law](images/beer-law.png)
 
 *Where I_0 is the initial intensity, y is distance travelled by the ray, and alpha = constant * refr-index-imag / wavelength
 
@@ -59,7 +59,7 @@ Fundamentally, light behaves as a wave, but geometric optics allows us to model 
 
 Set the refractive index back to 1.31 + 0i, which is approximately the refractive index of water at visible wavelengths. Change the shape to a circle and set the number of rays back to 1. Increase the maximum number of recursions to 3. Then vary the Wave Y Offset to produce a ray that refracts approximately along a scattering angle of 180 - 42 = 138°, as shown here:
 
-![Rainbow Angle](rainbow.png)
+![Rainbow Angle](images/rainbow.png)
 
 For red light (wavelength 750 nm, n = 1.330), the scattering angle is about 137.5°.
 - For blue light (wavelength 350 nm, n = 1.343), is the scattering angle greater than or less than 137.5°?
