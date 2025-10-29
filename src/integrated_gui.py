@@ -55,17 +55,17 @@ class IntegratedRayTracingApp:
         # Scene parameters
         self.scene_params = {
             "position_x": 0.0,
-            "position_y": 0.0,
-            "rotation_deg": 30.0,
+            "position_y": 0.3,
+            "rotation_deg": 0.0,
             "scale": 1.0,
             "refractive_index_real": 1.31,
             "refractive_index_imag": 0.0,
-            "wavelength_nm": 530.0,  # Wavelength in nanometers
-            "num_rays": 10,
+            "wavelength_nm": 532.0,  # Wavelength in nanometers
+            "num_rays": 1,
             "plane_wave_offset": 0.0,
             "polarization": Polarization.PARALLEL,
-            "max_recursion": 3,
-            "shape_type": ShapeType.SQUARE,
+            "max_recursion": 2,
+            "shape_type": ShapeType.HEXAGON,
         }
 
         # Scene objects
