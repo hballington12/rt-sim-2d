@@ -16,6 +16,7 @@ hiddenimports = []
 hiddenimports += collect_submodules('pygame')
 hiddenimports += collect_submodules('pygame_gui')
 hiddenimports += ['numpy', 'numpy.core._methods', 'numpy.lib.format']
+hiddenimports += ['pygame.constants', 'pygame.locals']  # Ensure pygame constants are included
 
 a = Analysis(
     ['src/integrated_gui.py'],
@@ -23,9 +24,9 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=['./hooks'],  # Add custom hooks directory
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['./hooks/rthook_pygame.py'],  # Add pygame runtime hook
     excludes=['matplotlib', 'PIL', 'tkinter'],  # Exclude unused large packages
     noarchive=False,
     optimize=0,
